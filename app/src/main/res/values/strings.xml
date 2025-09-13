@@ -10,4 +10,16 @@
     <string name="menu_home">Home</string>
     <string name="menu_gallery">Gallery</string>
     <string name="menu_slideshow">Slideshow</string>
+    <string name="login">Iniciar sesión</string>
+    <string name="register">Registrarse</string>
+    <string name="username">Usuario</string>
+    <string name="password">Contraseña</string>
+    <string name="go_to_register">Crear cuenta</string>
+    <string name="go_to_login">Ya tengo cuenta</string>
+    <string name="login_success">Sesión iniciada</string>
+    <string name="login_failed">Usuario o contraseña incorrectos</string>
+    <string name="register_success">Registro exitoso</string>
+    <string name="error_empty_fields">Completa todos los campos</string>
+    <string name="error_no_user_registered">No hay usuario registrado, regístrate primero</string>
+    <string name="action_logout">Cerrar sesión</string>
 </resources>
