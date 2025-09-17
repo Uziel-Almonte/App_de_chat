@@ -3,24 +3,51 @@ package com.example.app_de_chat;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.auth.AuthResult;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 public class RegisterActivity extends AppCompatActivity {
 
-    private EditText inputUser;
-    private EditText inputPass;
-    private Button btnRegister;
-    private Button btnGoToLogin;
+    private TextInputEditText inputUser;
+    private TextInputEditText inputPass;
+    FirebaseAuth mAuth;
+    ProgressBar progressBar;
+
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        // Check if user is signed in (non-null) and update UI accordingly.
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth != null) {
+            FirebaseUser currentUser = auth.getCurrentUser();
+            if(currentUser != null){
+                Intent intent = new Intent(RegisterActivity.this, MainActivity.class);
+                startActivity(intent);
+                finish();
+            }
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (AuthManager.isLoggedIn(this)) {
+        // Check login status using AuthManager
+        if (AuthManager.isLoggedIn()) {
             goToMainAndClear();
             return;
         }
@@ -29,22 +56,40 @@ public class RegisterActivity extends AppCompatActivity {
 
         inputUser = findViewById(R.id.inputUser);
         inputPass = findViewById(R.id.inputPass);
-        btnRegister = findViewById(R.id.btnRegister);
-        btnGoToLogin = findViewById(R.id.btnGoToLogin);
+        Button btnRegister = findViewById(R.id.btnRegister);
+        Button btnGoToLogin = findViewById(R.id.btnGoToLogin);
+        progressBar = findViewById(R.id.progressBar);
+        // mAuth = FirebaseAuth.getInstance(); // Handled by AuthManager
 
         btnRegister.setOnClickListener(v -> {
-            String user = inputUser.getText() != null ? inputUser.getText().toString().trim() : "";
-            String pass = inputPass.getText() != null ? inputPass.getText().toString() : "";
+            String email = inputUser.getText() != null ? inputUser.getText().toString().trim() : "";
+            String password = inputPass.getText() != null ? inputPass.getText().toString() : "";
 
-            if (TextUtils.isEmpty(user) || TextUtils.isEmpty(pass)) {
+            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
                 Toast.makeText(this, R.string.error_empty_fields, Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            AuthManager.register(this, user, pass);
-            Toast.makeText(this, R.string.register_success, Toast.LENGTH_SHORT).show();
-            goToMainAndClear();
+            progressBar.setVisibility(View.VISIBLE);
+            AuthManager.register(RegisterActivity.this, email, password, new AuthManager.AuthTaskListener() {
+                @Override
+                public void onSuccess(FirebaseUser user) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(RegisterActivity.this, "Registration Successful. Welcome " + user.getEmail(), Toast.LENGTH_SHORT).show();
+                    // You might want to automatically log them in and go to main, or redirect to login
+                    // For now, let's redirect to login to make them explicitly log in
+                    startActivity(new Intent(RegisterActivity.this, LoginActivity.class));
+                    finishAffinity(); // Clear this and any parent activities if going to Login
+                }
+
+                @Override
+                public void onFailure(String errorMessage) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(RegisterActivity.this, "Registration Failed: " + errorMessage, Toast.LENGTH_LONG).show();
+                }
+            });
         });
+
 
         btnGoToLogin.setOnClickListener(v -> {
             startActivity(new Intent(this, LoginActivity.class));

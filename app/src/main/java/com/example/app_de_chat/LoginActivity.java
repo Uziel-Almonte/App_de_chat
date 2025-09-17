@@ -3,24 +3,37 @@ package com.example.app_de_chat;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.Toast;
+import com.example.app_de_chat.FirebaseApplication;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.auth.AuthResult;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 public class LoginActivity extends AppCompatActivity {
 
     private EditText inputUser;
     private EditText inputPass;
-    private Button btnLogin;
-    private Button btnGoToRegister;
+    FirebaseAuth mAuth;
+    ProgressBar progressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (AuthManager.isLoggedIn(this)) {
+
+        // Check login status using AuthManager
+        if (AuthManager.isLoggedIn()) {
             goToMainAndClear();
             return;
         }
@@ -29,35 +42,64 @@ public class LoginActivity extends AppCompatActivity {
 
         inputUser = findViewById(R.id.inputUser);
         inputPass = findViewById(R.id.inputPass);
-        btnLogin = findViewById(R.id.btnLogin);
-        btnGoToRegister = findViewById(R.id.btnGoToRegister);
+        Button btnLogin = findViewById(R.id.btnLogin);
+        Button btnGoToRegister = findViewById(R.id.btnGoToRegister);
+        // mAuth = FirebaseAuth.getInstance(); // Handled by AuthManager
+        progressBar = findViewById(R.id.progressBar);
 
         btnLogin.setOnClickListener(v -> {
-            String user = inputUser.getText() != null ? inputUser.getText().toString().trim() : "";
+            String email = inputUser.getText() != null ? inputUser.getText().toString().trim() : "";
             String pass = inputPass.getText() != null ? inputPass.getText().toString() : "";
 
-            if (TextUtils.isEmpty(user) || TextUtils.isEmpty(pass)) {
+            // Validation is now handled by AuthManager, but you can keep it here for early exit
+            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(pass)) {
                 Toast.makeText(this, R.string.error_empty_fields, Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            if (!AuthManager.isUserRegistered(this)) {
-                Toast.makeText(this, R.string.error_no_user_registered, Toast.LENGTH_SHORT).show();
-                return;
-            }
+            progressBar.setVisibility(View.VISIBLE);
+            AuthManager.login(LoginActivity.this, email, pass, new AuthManager.AuthTaskListener() {
+                @Override
+                public void onSuccess(FirebaseUser user) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(LoginActivity.this, "Login Successful. Welcome " + user.getEmail(), Toast.LENGTH_SHORT).show();
+                    goToMainAndClear();
+                }
 
-            boolean ok = AuthManager.login(this, user, pass);
-            if (ok) {
-                Toast.makeText(this, R.string.login_success, Toast.LENGTH_SHORT).show();
-                goToMainAndClear();
-            } else {
-                Toast.makeText(this, R.string.login_failed, Toast.LENGTH_SHORT).show();
-            }
+                @Override
+                public void onFailure(String errorMessage) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(LoginActivity.this, "Login Failed: " + errorMessage, Toast.LENGTH_LONG).show();
+                }
+            });
         });
 
         btnGoToRegister.setOnClickListener(v -> {
             startActivity(new Intent(this, RegisterActivity.class));
         });
+    }
+
+    private void signIn(String email, String password) {
+        // [START sign_in_with_email]
+        mAuth.signInWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
+                    @Override
+                    public void onComplete(@NonNull Task<AuthResult> task) {
+                        progressBar.setVisibility(View.GONE);
+                        if (task.isSuccessful()) {
+                            // Sign in success, update UI with the signed-in user's information
+                            Toast.makeText(LoginActivity.this, "Login Successful.",
+                                    Toast.LENGTH_SHORT).show();
+                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                            startActivity(intent);
+                            finish();
+                        } else {
+                            // If sign in fails, display a message to the user.
+                            Toast.makeText(LoginActivity.this, "Authentication failed.",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
     }
 
     private void goToMainAndClear() {
