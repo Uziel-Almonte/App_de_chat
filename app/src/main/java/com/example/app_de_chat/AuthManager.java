@@ -11,6 +11,10 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public final class AuthManager {
     private static final String PREFS = "auth_prefs";
@@ -18,6 +22,7 @@ public final class AuthManager {
     private static final String KEY_PASS = "pass";
     private static final String KEY_LOGGED_IN = "logged_in";
     private static FirebaseAuth firebaseAuthInstance;
+    private static FirebaseFirestore firestoreInstance;
 
 
     // Private constructor to prevent instantiation
@@ -29,6 +34,14 @@ public final class AuthManager {
             firebaseAuthInstance = FirebaseAuth.getInstance();
         }
         return firebaseAuthInstance;
+    }
+
+    // Get Firestore instance (singleton pattern)
+    private static FirebaseFirestore getFirestoreInstance() {
+        if (firestoreInstance == null) {
+            firestoreInstance = FirebaseFirestore.getInstance();
+        }
+        return firestoreInstance;
     }
 
     // Check if a user is currently logged in
@@ -50,7 +63,7 @@ public final class AuthManager {
         return null;
     }
 
-    // Register a new user with Firebase
+    // Register a new user with Firebase and save to Firestore
     public static void register(Context context, String email, String password, final AuthTaskListener listener) {
         if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
             if (listener != null) {
@@ -62,13 +75,50 @@ public final class AuthManager {
         getAuthInstance().createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
-                        if (listener != null) {
-                            listener.onSuccess(getAuthInstance().getCurrentUser());
+                        FirebaseUser firebaseUser = getAuthInstance().getCurrentUser();
+                        if (firebaseUser != null) {
+                            // Save user data to Firestore
+                            saveUserToFirestore(firebaseUser, listener);
+                        } else {
+                            if (listener != null) {
+                                listener.onFailure("User creation failed - no user returned.");
+                            }
                         }
                     } else {
                         if (listener != null) {
                             String errorMessage = task.getException() != null ? task.getException().getMessage() : "Registration failed.";
                             listener.onFailure(errorMessage);
+                        }
+                    }
+                });
+    }
+
+    // Save user data to Firestore
+    private static void saveUserToFirestore(FirebaseUser firebaseUser, final AuthTaskListener listener) {
+        User user = new User(
+                firebaseUser.getUid(),
+                firebaseUser.getEmail(),
+                firebaseUser.getDisplayName() // This might be null initially
+        );
+
+        Map<String, Object> userData = new HashMap<>();
+        userData.put("uid", user.getUid());
+        userData.put("email", user.getEmail());
+        userData.put("displayName", user.getDisplayName());
+
+        getFirestoreInstance().collection("users")
+                .document(firebaseUser.getUid())
+                .set(userData)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        if (listener != null) {
+                            listener.onSuccess(firebaseUser);
+                        }
+                    } else {
+                        if (listener != null) {
+                            String errorMessage = task.getException() != null ?
+                                    task.getException().getMessage() : "Failed to save user data.";
+                            listener.onFailure("Registration successful but failed to save user data: " + errorMessage);
                         }
                     }
                 });
@@ -103,7 +153,7 @@ public final class AuthManager {
         getAuthInstance().signOut();
     }
 
-    // Interface for callback listeners
+    // Interface for authentication task callbacks
     public interface AuthTaskListener {
         void onSuccess(FirebaseUser user);
         void onFailure(String errorMessage);
