@@ -51,6 +51,8 @@ dependencies {
     // Firebase dependencies (versions managed by BoM)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.activity)
+    implementation(libs.firebase.database)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

@@ -1,5 +1,6 @@
 package com.example.app_de_chat;
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +16,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
 
     private List<User> userList;
     private OnUserClickListener listener;
+    private Context context;
 
     public interface OnUserClickListener {
         void onUserClick(User user);

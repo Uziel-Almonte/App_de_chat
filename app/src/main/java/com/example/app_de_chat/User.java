@@ -5,7 +5,7 @@ public class User {
     private String email;
     private String displayName;
 
-    // Default constructor required for Firebase
+    // No-argument constructor required by Firebase
     public User() {
     }
 

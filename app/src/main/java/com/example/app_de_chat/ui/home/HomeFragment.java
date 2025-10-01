@@ -21,6 +21,10 @@ import com.google.firebase.firestore.QueryDocumentSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 
+import android.content.Intent;
+import com.example.app_de_chat.ChatActivity;
+
+
 public class HomeFragment extends Fragment {
 
     private FragmentHomeBinding binding;
@@ -52,11 +56,9 @@ public class HomeFragment extends Fragment {
         binding.recyclerUsers.setLayoutManager(new LinearLayoutManager(getContext()));
         binding.recyclerUsers.setAdapter(userAdapter);
 
-        // Handle user click
+        // Handle user click - open ChatActivity
         userAdapter.setOnUserClickListener(user -> {
-            // For now, just show a toast when user is clicked
-            // You can later implement starting a chat with this user
-            Toast.makeText(getContext(), "Selected user: " + user.getEmail(), Toast.LENGTH_SHORT).show();
+            openChatActivity(user);
         });
     }
 
@@ -102,6 +104,14 @@ public class HomeFragment extends Fragment {
                                 Toast.LENGTH_SHORT).show();
                     }
                 });
+    }
+
+    private void openChatActivity(User user) {
+        Intent intent = new Intent(getActivity(), ChatActivity.class);
+        intent.putExtra("userId", user.getUid());
+        intent.putExtra("userName", user.getDisplayName());
+        intent.putExtra("userEmail", user.getEmail());
+        startActivity(intent);
     }
 
     private void showLoading(boolean isLoading) {
