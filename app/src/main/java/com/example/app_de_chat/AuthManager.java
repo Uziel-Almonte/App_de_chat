@@ -3,6 +3,7 @@ package com.example.app_de_chat;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.NonNull; // For @NonNull annotation
 
@@ -12,6 +13,7 @@ import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.messaging.FirebaseMessaging;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +23,7 @@ public final class AuthManager {
     private static final String KEY_USER = "user";
     private static final String KEY_PASS = "pass";
     private static final String KEY_LOGGED_IN = "logged_in";
+    private static final String TAG = "AuthManager";
     private static FirebaseAuth firebaseAuthInstance;
     private static FirebaseFirestore firestoreInstance;
 
@@ -77,7 +80,7 @@ public final class AuthManager {
                     if (task.isSuccessful()) {
                         FirebaseUser firebaseUser = getAuthInstance().getCurrentUser();
                         if (firebaseUser != null) {
-                            // Save user data to Firestore
+                            // Save user data to Firestore and get FCM token
                             saveUserToFirestore(firebaseUser, listener);
                         } else {
                             if (listener != null) {
@@ -95,32 +98,48 @@ public final class AuthManager {
 
     // Save user data to Firestore
     private static void saveUserToFirestore(FirebaseUser firebaseUser, final AuthTaskListener listener) {
-        User user = new User(
-                firebaseUser.getUid(),
-                firebaseUser.getEmail(),
-                firebaseUser.getDisplayName() // This might be null initially
-        );
-
-        Map<String, Object> userData = new HashMap<>();
-        userData.put("uid", user.getUid());
-        userData.put("email", user.getEmail());
-        userData.put("displayName", user.getDisplayName());
-
-        getFirestoreInstance().collection("users")
-                .document(firebaseUser.getUid())
-                .set(userData)
+        // First get FCM token
+        FirebaseMessaging.getInstance().getToken()
                 .addOnCompleteListener(task -> {
+                    String fcmToken = null;
                     if (task.isSuccessful()) {
-                        if (listener != null) {
-                            listener.onSuccess(firebaseUser);
-                        }
+                        fcmToken = task.getResult();
+                        Log.d(TAG, "FCM Registration Token: " + fcmToken);
                     } else {
-                        if (listener != null) {
-                            String errorMessage = task.getException() != null ?
-                                    task.getException().getMessage() : "Failed to save user data.";
-                            listener.onFailure("Registration successful but failed to save user data: " + errorMessage);
-                        }
+                        Log.w(TAG, "Fetching FCM registration token failed", task.getException());
                     }
+
+                    // Create user data with FCM token
+                    User user = new User(
+                            firebaseUser.getUid(),
+                            firebaseUser.getEmail(),
+                            firebaseUser.getDisplayName() // This might be null initially
+                    );
+
+                    Map<String, Object> userData = new HashMap<>();
+                    userData.put("uid", user.getUid());
+                    userData.put("email", user.getEmail());
+                    userData.put("displayName", user.getDisplayName());
+                    if (fcmToken != null) {
+                        userData.put("fcmToken", fcmToken);
+                    }
+
+                    getFirestoreInstance().collection("users")
+                            .document(firebaseUser.getUid())
+                            .set(userData)
+                            .addOnCompleteListener(firestoreTask -> {
+                                if (firestoreTask.isSuccessful()) {
+                                    if (listener != null) {
+                                        listener.onSuccess(firebaseUser);
+                                    }
+                                } else {
+                                    if (listener != null) {
+                                        String errorMessage = firestoreTask.getException() != null ?
+                                                firestoreTask.getException().getMessage() : "Failed to save user data.";
+                                        listener.onFailure("Registration successful but failed to save user data: " + errorMessage);
+                                    }
+                                }
+                            });
                 });
     }
 
@@ -136,14 +155,47 @@ public final class AuthManager {
         getAuthInstance().signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
+                        FirebaseUser user = getAuthInstance().getCurrentUser();
+                        if (user != null) {
+                            // Update FCM token on login
+                            updateFCMToken(user);
+                        }
                         if (listener != null) {
-                            listener.onSuccess(getAuthInstance().getCurrentUser());
+                            listener.onSuccess(user);
                         }
                     } else {
                         if (listener != null) {
                             String errorMessage = task.getException() != null ? task.getException().getMessage() : "Login failed.";
                             listener.onFailure(errorMessage);
                         }
+                    }
+                });
+    }
+
+    // Update FCM token for current user
+    private static void updateFCMToken(FirebaseUser user) {
+        FirebaseMessaging.getInstance().getToken()
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        String token = task.getResult();
+                        Log.d(TAG, "FCM Registration Token: " + token);
+
+                        // Update token in Firestore
+                        getFirestoreInstance().collection("users")
+                                .document(user.getUid())
+                                .update("fcmToken", token)
+                                .addOnSuccessListener(aVoid -> Log.d(TAG, "FCM token updated successfully"))
+                                .addOnFailureListener(e -> {
+                                    Log.w(TAG, "Failed to update FCM token", e);
+                                    // If update fails, try to set the token
+                                    getFirestoreInstance().collection("users")
+                                            .document(user.getUid())
+                                            .set(new HashMap<String, Object>() {{
+                                                put("fcmToken", token);
+                                            }}, com.google.firebase.firestore.SetOptions.merge());
+                                });
+                    } else {
+                        Log.w(TAG, "Fetching FCM registration token failed", task.getException());
                     }
                 });
     }

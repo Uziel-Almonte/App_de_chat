@@ -51,8 +51,12 @@ dependencies {
     // Firebase dependencies (versions managed by BoM)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation(libs.activity)
     implementation(libs.firebase.database)
+
+    // HTTP client for sending notifications
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

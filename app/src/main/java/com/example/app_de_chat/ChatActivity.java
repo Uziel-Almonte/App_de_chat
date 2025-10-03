@@ -46,6 +46,7 @@ public class ChatActivity extends AppCompatActivity {
     RecyclerView recyclerView;
 
     MessageAdapter messageAdapter;
+    NotificationHelper notificationHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +54,8 @@ public class ChatActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_chat);
         
+        // Initialize notification helper
+        notificationHelper = new NotificationHelper(this);
 
         // inicializar variables del sender
         senderId = FirebaseAuth.getInstance().getUid();
@@ -165,6 +168,8 @@ public class ChatActivity extends AppCompatActivity {
                         if (task.isSuccessful()) {
                             // guardar el el chat del receptor
                             dbReferenceReceiver.child(messageId).setValue(messageModel);
+                            // Send notification to receiver
+                            sendNotificationToReceiver(message);
                         }
                     }
                 })
@@ -177,6 +182,20 @@ public class ChatActivity extends AppCompatActivity {
 
         // Scroll hacia el ultimo mensaje
         recyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+    }
+
+    private void sendNotificationToReceiver(String message) {
+        if (notificationHelper != null && receiverId != null && senderName != null) {
+            notificationHelper.sendNotificationToUser(receiverId, senderName, message);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (notificationHelper != null) {
+            notificationHelper.stopListening();
+        }
     }
 
     @Override

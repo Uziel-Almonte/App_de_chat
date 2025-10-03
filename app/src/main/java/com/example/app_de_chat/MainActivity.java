@@ -5,6 +5,12 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.util.Log;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import android.Manifest;
 
 import com.example.app_de_chat.databinding.ActivityMainBinding;
 import com.google.android.material.snackbar.Snackbar;
@@ -19,6 +25,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -26,6 +34,9 @@ public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
     private FirebaseAuth mAuth;
     private FirebaseUser user;
+    private NotificationHelper notificationHelper;
+    private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 1001;
+    private static final String TAG = "MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +57,15 @@ public class MainActivity extends AppCompatActivity {
             finish();
             return;
         }
+
+        // Request notification permission for Android 13+
+        requestNotificationPermission();
+
+        // Initialize FCM token
+        initializeFCMToken();
+
+        // Initialize notification helper to listen for notifications
+        notificationHelper = new NotificationHelper(this);
 
         setSupportActionBar(binding.appBarMain.toolbar);
 
@@ -70,6 +90,63 @@ public class MainActivity extends AppCompatActivity {
         NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
         NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
         NavigationUI.setupWithNavController(navigationView, navController);
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIFICATION_PERMISSION_REQUEST_CODE);
+            }
+        }
+    }
+
+    private void initializeFCMToken() {
+        FirebaseMessaging.getInstance().getToken()
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful()) {
+                        Log.w(TAG, "Fetching FCM registration token failed", task.getException());
+                        return;
+                    }
+
+                    // Get new FCM registration token
+                    String token = task.getResult();
+                    Log.d(TAG, "FCM Registration Token: " + token);
+
+                    // Save token to Firestore
+                    saveTokenToFirestore(token);
+                });
+    }
+
+    private void saveTokenToFirestore(String token) {
+        if (user != null) {
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
+            db.collection("users").document(user.getUid())
+                    .update("fcmToken", token)
+                    .addOnSuccessListener(aVoid -> Log.d(TAG, "FCM token updated successfully"))
+                    .addOnFailureListener(e -> {
+                        Log.w(TAG, "Failed to update FCM token", e);
+                        // If update fails, try to set the token
+                        db.collection("users").document(user.getUid())
+                                .set(new java.util.HashMap<String, Object>() {{
+                                    put("fcmToken", token);
+                                }}, com.google.firebase.firestore.SetOptions.merge());
+                    });
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Notification permission granted");
+            } else {
+                Log.d(TAG, "Notification permission denied");
+            }
+        }
     }
 
     @Override
@@ -103,5 +180,13 @@ public class MainActivity extends AppCompatActivity {
         NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
         return NavigationUI.navigateUp(navController, mAppBarConfiguration)
                 || super.onSupportNavigateUp();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (notificationHelper != null) {
+            notificationHelper.stopListening();
+        }
     }
 }
