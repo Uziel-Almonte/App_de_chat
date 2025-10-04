@@ -45,6 +45,9 @@ dependencies {
     implementation(libs.navigation.fragment)
     implementation(libs.navigation.ui)
 
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+
+
     // Import the Firebase BoM
     implementation(platform(libs.firebase.bom))
 

@@ -15,6 +15,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import android.net.Uri;
+
 
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
@@ -25,6 +27,12 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +46,9 @@ public class ChatActivity extends AppCompatActivity {
     String receiverId, receiverName, senderRoom, receiverRoom;
     DatabaseReference dbReferenceSender, dbReferenceReceiver, userReference;
     String senderId, senderName, senderImage;
+
+    private static final int PICK_IMAGE_REQUEST = 1;
+    private ImageView imagePickerBtn;
 
     long timestamp;
 
@@ -60,6 +71,13 @@ public class ChatActivity extends AppCompatActivity {
         // inicializar variables del sender
         senderId = FirebaseAuth.getInstance().getUid();
         userReference = FirebaseDatabase.getInstance().getReference("users");
+
+
+        // Initialize image picker button
+        imagePickerBtn = findViewById(R.id.imagePickerIcon);
+
+        // Set image picker click listener
+        imagePickerBtn.setOnClickListener(v -> openImagePicker());
 
         // recibir informacion del receptor
         receiverId = getIntent().getStringExtra("userId");
@@ -181,6 +199,93 @@ public class ChatActivity extends AppCompatActivity {
                 });
 
         // Scroll hacia el ultimo mensaje
+        recyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+    }
+
+    private void openImagePicker() {
+        Intent intent = new Intent();
+        intent.setType("image/*");
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        startActivityForResult(Intent.createChooser(intent, "Select Image"), PICK_IMAGE_REQUEST);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri imageUri = data.getData();
+            uploadImageAndSendMessage(imageUri);
+        }
+    }
+
+    private void uploadImageAndSendMessage(Uri imageUri) {
+        if (imageUri == null) {
+            Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, "Processing image...", Toast.LENGTH_SHORT).show();
+
+        try {
+            // Convertir imagen a Base64
+            InputStream inputStream = getContentResolver().openInputStream(imageUri);
+            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+
+            // Redimensionar imagen para reducir tamaño
+            Bitmap resizedBitmap = resizeImage(bitmap, 800, 600);
+
+            // Convertir a Base64
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 60, baos);
+            byte[] imageBytes = baos.toByteArray();
+            String base64Image = Base64.encodeToString(imageBytes, Base64.DEFAULT);
+
+            // Enviar mensaje con imagen
+            sendImageMessage(base64Image);
+
+            Toast.makeText(this, "Image sent successfully", Toast.LENGTH_SHORT).show();
+
+        } catch (Exception e) {
+            Toast.makeText(this, "Failed to process image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Método para redimensionar imagen
+    private Bitmap resizeImage(Bitmap bitmap, int maxWidth, int maxHeight) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+
+        float aspectRatio = (float) width / height;
+
+        if (width > height) {
+            width = maxWidth;
+            height = (int) (width / aspectRatio);
+        } else {
+            height = maxHeight;
+            width = (int) (height * aspectRatio);
+        }
+
+        return Bitmap.createScaledBitmap(bitmap, width, height, true);
+    }
+
+    // Actualizar sendImageMessage para usar Base64
+    private void sendImageMessage(String base64Image) {
+        String messageId = UUID.randomUUID().toString();
+        MessageModel messageModel = new MessageModel(messageId, senderId, senderName, base64Image, true);
+
+        // Save to sender's chat room
+        dbReferenceSender.child(messageId).setValue(messageModel)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        dbReferenceReceiver.child(messageId).setValue(messageModel);
+                        sendNotificationToReceiver("Sent an image");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(ChatActivity.this, "Failed to send image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+
         recyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
     }
 
