@@ -44,8 +44,9 @@ public class NotificationHelper {
         verifyServiceAccountFile();
 
         createNotificationChannel();
-        startListeningForNotifications();
+        //startListeningForNotifications();
     }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = "Chat Messages";
