@@ -63,15 +63,15 @@ public class HomeFragment extends Fragment {
     }
 
     private void searchUser() {
-        String email = binding.editEmail.getText().toString().trim();
+        String searchTerm = binding.editEmail.getText().toString().trim();
 
-        if (TextUtils.isEmpty(email)) {
-            binding.editEmail.setError("Please enter an email");
+        if (TextUtils.isEmpty(searchTerm)) {
+            binding.editEmail.setError("Please enter an email or name");
             return;
         }
 
         // Don't allow searching for own email
-        if (email.equals(mAuth.getCurrentUser().getEmail())) {
+        if (searchTerm.equals(mAuth.getCurrentUser().getEmail())) {
             Toast.makeText(getContext(), "You cannot search for yourself", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -79,29 +79,68 @@ public class HomeFragment extends Fragment {
         // Show loading
         showLoading(true);
 
-        // Search for users with the entered email
+        // Search for users by email first
+        searchByEmail(searchTerm);
+    }
+
+    private void searchByEmail(String searchTerm) {
         db.collection("users")
-                .whereEqualTo("email", email)
+                .whereEqualTo("email", searchTerm)
+                .get()
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        List<User> emailResults = new ArrayList<>();
+
+                        for (QueryDocumentSnapshot document : task.getResult()) {
+                            User user = document.toObject(User.class);
+                            emailResults.add(user);
+                        }
+
+                        // Search by displayName as well
+                        searchByDisplayName(searchTerm, emailResults);
+                    } else {
+                        // If email search fails, try displayName search only
+                        searchByDisplayName(searchTerm, new ArrayList<>());
+                    }
+                });
+    }
+
+    private void searchByDisplayName(String searchTerm, List<User> emailResults) {
+        db.collection("users")
+                .whereEqualTo("displayName", searchTerm)
                 .get()
                 .addOnCompleteListener(task -> {
                     showLoading(false);
 
-                    if (task.isSuccessful()) {
-                        List<User> users = new ArrayList<>();
+                    List<User> allResults = new ArrayList<>(emailResults);
 
+                    if (task.isSuccessful()) {
                         for (QueryDocumentSnapshot document : task.getResult()) {
                             User user = document.toObject(User.class);
-                            users.add(user);
-                        }
 
-                        if (users.isEmpty()) {
-                            showNoResults();
-                        } else {
-                            showResults(users);
+                            // Avoid duplicates (in case someone searches for their own email/name)
+                            boolean isDuplicate = false;
+                            for (User existingUser : allResults) {
+                                if (existingUser.getUid().equals(user.getUid())) {
+                                    isDuplicate = true;
+                                    break;
+                                }
+                            }
+
+                            if (!isDuplicate) {
+                                allResults.add(user);
+                            }
                         }
+                    }
+
+                    // Filter out current user from results
+                    String currentUserId = mAuth.getCurrentUser().getUid();
+                    allResults.removeIf(user -> user.getUid().equals(currentUserId));
+
+                    if (allResults.isEmpty()) {
+                        showNoResults();
                     } else {
-                        Toast.makeText(getContext(), "Search failed: " + task.getException().getMessage(),
-                                Toast.LENGTH_SHORT).show();
+                        showResults(allResults);
                     }
                 });
     }
