@@ -28,6 +28,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import android.graphics.Bitmap;
@@ -37,7 +38,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import android.util.Log;
 
@@ -78,11 +81,6 @@ public class ChatActivity extends AppCompatActivity {
             loadCurrentUserDisplayName();
         }
 
-        //Log.d("ChatActivity", "UserID: " + user.getUid());
-        //Log.d("ChatActivity", "User Nombre: " + user.getDisplayName());
-        //Log.d("ChatActivity", "User Correo: " + user.getEmail());
-
-
         // Set up the toolbar with back button
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -98,20 +96,16 @@ public class ChatActivity extends AppCompatActivity {
         senderId = FirebaseAuth.getInstance().getUid();
         userReference = FirebaseDatabase.getInstance().getReference("users");
 
-
         // Initialize image picker button
         imagePickerBtn = findViewById(R.id.imagePickerIcon);
-
-        // Set image picker click listener
         imagePickerBtn.setOnClickListener(v -> openImagePicker());
 
         // recibir informacion del receptor
         receiverId = getIntent().getStringExtra("userId");
         receiverName = getIntent().getStringExtra("userName");
 
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle(receiverName);
-        }
+        // Try to resolve receiver display name if missing or equals the UID
+        resolveReceiverNameIfNeeded();
 
         // cargar informacion del sender
         loadSenderInfo();
@@ -147,8 +141,37 @@ public class ChatActivity extends AppCompatActivity {
                 Toast.makeText(ChatActivity.this, "Message cannot be empty", Toast.LENGTH_SHORT).show();
             }
         });
+
+        // Guardar conversación reciente automáticamente
+        saveRecentChat();
     }
 
+    private void resolveReceiverNameIfNeeded() {
+        if (receiverId == null) return;
+        boolean needsResolve = (receiverName == null || receiverName.isEmpty() || receiverName.equals(receiverId));
+        if (!needsResolve) {
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle(receiverName);
+            return;
+        }
+        FirebaseFirestore.getInstance().collection("users").document(receiverId).get()
+                .addOnSuccessListener(doc -> {
+                    String dn = doc.getString("displayName");
+                    String email = doc.getString("email");
+                    String best = (dn != null && !dn.isEmpty()) ? dn : (email != null && !email.isEmpty()) ? email : receiverId;
+                    receiverName = best;
+                    if (getSupportActionBar() != null) getSupportActionBar().setTitle(receiverName);
+                    // Backfill our recent_chats entry with the proper name for next time
+                    if (senderId != null) {
+                        FirebaseFirestore.getInstance()
+                                .collection("recent_chats").document(senderId)
+                                .collection("chats").document(receiverId)
+                                .update("userName", receiverName);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (getSupportActionBar() != null) getSupportActionBar().setTitle(receiverName != null ? receiverName : receiverId);
+                });
+    }
 
     private void loadCurrentUserDisplayName() {
         FirebaseFirestore.getInstance()
@@ -240,6 +263,8 @@ public class ChatActivity extends AppCompatActivity {
                             Log.d("ChatActivity", "Message saved to sender's room successfully");
                             // guardar el el chat del receptor
                             dbReferenceReceiver.child(messageId).setValue(messageModel);
+                            // Update recent chats for both users (with text preview)
+                            updateRecentChats(message);
                             // Send notification to receiver
                             Log.d("ChatActivity", "Calling sendNotificationToReceiver");
                             sendNotificationToReceiver(message);
@@ -336,6 +361,8 @@ public class ChatActivity extends AppCompatActivity {
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
                         dbReferenceReceiver.child(messageId).setValue(messageModel);
+                        // Update recent chats for both users (image preview)
+                        updateRecentChats("Imagen");
                         sendNotificationToReceiver("Sent an image");
                     }
                 })
@@ -344,6 +371,57 @@ public class ChatActivity extends AppCompatActivity {
                 });
 
         recyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+    }
+
+    private void saveRecentChat() {
+        if (senderId == null || receiverId == null || receiverName == null) return;
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        String path = "recent_chats/" + senderId + "/chats";
+        db.collection(path)
+                .document(receiverId)
+                .get()
+                .addOnSuccessListener(document -> {
+                    if (!document.exists()) {
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("userId", receiverId);
+                        data.put("userName", receiverName);
+                        data.put("lastMessage", "");
+                        data.put("timestamp", System.currentTimeMillis());
+                        document.getReference().set(data);
+                    }
+                });
+    }
+
+    // Update recent chat entries for both users with last message preview and timestamp
+    private void updateRecentChats(String lastMessagePreview) {
+        if (senderId == null || receiverId == null) return;
+        long now = System.currentTimeMillis();
+        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+
+        // Sender's view (shows receiver info)
+        Map<String, Object> senderEntry = new HashMap<>();
+        senderEntry.put("userId", receiverId);
+        senderEntry.put("userName", receiverName);
+        senderEntry.put("lastMessage", lastMessagePreview);
+        senderEntry.put("timestamp", now);
+        firestore.collection("recent_chats")
+                .document(senderId)
+                .collection("chats")
+                .document(receiverId)
+                .set(senderEntry);
+
+        // Receiver's view (shows sender info)
+        String otherName = (senderName != null && !senderName.isEmpty()) ? senderName : (user != null ? user.getEmail() : "Usuario");
+        Map<String, Object> receiverEntry = new HashMap<>();
+        receiverEntry.put("userId", senderId);
+        receiverEntry.put("userName", otherName);
+        receiverEntry.put("lastMessage", lastMessagePreview);
+        receiverEntry.put("timestamp", now);
+        firestore.collection("recent_chats")
+                .document(receiverId)
+                .collection("chats")
+                .document(senderId)
+                .set(receiverEntry);
     }
 
     private void sendNotificationToReceiver(String message) {
