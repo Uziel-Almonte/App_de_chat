@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseUser;
 
 public class RegisterActivity extends AppCompatActivity {
 
+    private TextInputEditText inputName;
     private TextInputEditText inputUser;
     private TextInputEditText inputPass;
     FirebaseAuth mAuth;
@@ -54,32 +55,31 @@ public class RegisterActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_register);
 
+        inputName = findViewById(R.id.inputName);
         inputUser = findViewById(R.id.inputUser);
         inputPass = findViewById(R.id.inputPass);
         Button btnRegister = findViewById(R.id.btnRegister);
         Button btnGoToLogin = findViewById(R.id.btnGoToLogin);
         progressBar = findViewById(R.id.progressBar);
-        // mAuth = FirebaseAuth.getInstance(); // Handled by AuthManager
 
         btnRegister.setOnClickListener(v -> {
+            String name = inputName.getText() != null ? inputName.getText().toString().trim() : "";
             String email = inputUser.getText() != null ? inputUser.getText().toString().trim() : "";
             String password = inputPass.getText() != null ? inputPass.getText().toString() : "";
 
-            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
-                Toast.makeText(this, R.string.error_empty_fields, Toast.LENGTH_SHORT).show();
+            if (TextUtils.isEmpty(name) || TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
+                Toast.makeText(this, "Todos los campos son requeridos", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             progressBar.setVisibility(View.VISIBLE);
-            AuthManager.register(RegisterActivity.this, email, password, new AuthManager.AuthTaskListener() {
+            AuthManager.register(RegisterActivity.this, email, password, name, new AuthManager.AuthTaskListener() {
                 @Override
                 public void onSuccess(FirebaseUser user) {
                     progressBar.setVisibility(View.GONE);
-                    Toast.makeText(RegisterActivity.this, "Registration Successful. Welcome " + user.getEmail(), Toast.LENGTH_SHORT).show();
-                    // You might want to automatically log them in and go to main, or redirect to login
-                    // For now, let's redirect to login to make them explicitly log in
+                    Toast.makeText(RegisterActivity.this, "Registration Successful. Welcome " + name, Toast.LENGTH_SHORT).show();
                     startActivity(new Intent(RegisterActivity.this, LoginActivity.class));
-                    finishAffinity(); // Clear this and any parent activities if going to Login
+                    finishAffinity();
                 }
 
                 @Override

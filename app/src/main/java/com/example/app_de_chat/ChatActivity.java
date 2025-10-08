@@ -66,6 +66,14 @@ public class ChatActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_chat);
 
+        // Set up the toolbar with back button
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayShowHomeEnabled(true);
+        }
+
         // Initialize notification helper
         notificationHelper = new NotificationHelper(this);
 
@@ -339,12 +347,16 @@ public class ChatActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.action_logout) {
+        if (item.getItemId() == android.R.id.home) {
+            // Handle back button press
+            finish();
+            return true;
+        } else if (item.getItemId() == R.id.action_logout) {
             FirebaseAuth.getInstance().signOut();
             startActivity(new Intent(ChatActivity.this, LoginActivity.class));
             finish();
             return true;
         }
-        return false;
+        return super.onOptionsItemSelected(item);
     }
 }

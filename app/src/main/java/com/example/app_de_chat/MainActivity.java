@@ -11,6 +11,7 @@ import android.util.Log;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
+import android.widget.TextView;
 
 import com.example.app_de_chat.databinding.ActivityMainBinding;
 import com.google.android.material.snackbar.Snackbar;
@@ -81,6 +82,9 @@ public class MainActivity extends AppCompatActivity {
         DrawerLayout drawer = binding.drawerLayout;
         NavigationView navigationView = binding.navView;
 
+        // Setup navigation header with user information
+        setupNavigationHeader(navigationView);
+
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
         mAppBarConfiguration = new AppBarConfiguration.Builder(
@@ -90,6 +94,33 @@ public class MainActivity extends AppCompatActivity {
         NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
         NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
         NavigationUI.setupWithNavController(navigationView, navController);
+    }
+
+    private void setupNavigationHeader(NavigationView navigationView) {
+        View headerView = navigationView.getHeaderView(0);
+        TextView navUserName = headerView.findViewById(R.id.nav_user_name);
+        TextView navUserEmail = headerView.findViewById(R.id.nav_user_email);
+
+        // Set email immediately
+        if (user != null && user.getEmail() != null) {
+            navUserEmail.setText(user.getEmail());
+        }
+
+        // Get display name from Firestore
+        AuthManager.getCurrentUserDisplayName(new AuthManager.DisplayNameListener() {
+            @Override
+            public void onSuccess(String displayName) {
+                navUserName.setText(displayName);
+            }
+
+            @Override
+            public void onFailure(String errorMessage) {
+                // Fallback to email if display name fetch fails
+                if (user != null && user.getEmail() != null) {
+                    navUserName.setText(user.getEmail());
+                }
+            }
+        });
     }
 
     private void requestNotificationPermission() {
@@ -158,12 +189,10 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here.
         int id = item.getItemId();
-
         if (id == R.id.action_logout) {
             // Handle logout
-            FirebaseAuth.getInstance().signOut();
+            AuthManager.logout();
             Intent intent = new Intent(MainActivity.this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);

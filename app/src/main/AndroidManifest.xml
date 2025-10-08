@@ -39,6 +39,7 @@
         <activity
             android:name=".ChatActivity"
             android:label="chatroom"
+            android:theme="@style/Theme.App_de_chat.NoActionBar"
             android:exported="false" />
 
         <!-- Firebase Messaging Service -->

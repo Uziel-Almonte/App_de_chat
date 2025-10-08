@@ -68,6 +68,11 @@ public final class AuthManager {
 
     // Register a new user with Firebase and save to Firestore
     public static void register(Context context, String email, String password, final AuthTaskListener listener) {
+        register(context, email, password, null, listener);
+    }
+
+    // Register a new user with Firebase and save to Firestore with displayName
+    public static void register(Context context, String email, String password, String displayName, final AuthTaskListener listener) {
         if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
             if (listener != null) {
                 listener.onFailure("Email and password cannot be empty.");
@@ -81,7 +86,7 @@ public final class AuthManager {
                         FirebaseUser firebaseUser = getAuthInstance().getCurrentUser();
                         if (firebaseUser != null) {
                             // Save user data to Firestore and get FCM token
-                            saveUserToFirestore(firebaseUser, listener);
+                            saveUserToFirestore(firebaseUser, displayName, listener);
                         } else {
                             if (listener != null) {
                                 listener.onFailure("User creation failed - no user returned.");
@@ -97,7 +102,7 @@ public final class AuthManager {
     }
 
     // Save user data to Firestore
-    private static void saveUserToFirestore(FirebaseUser firebaseUser, final AuthTaskListener listener) {
+    private static void saveUserToFirestore(FirebaseUser firebaseUser, String displayName, final AuthTaskListener listener) {
         // First get FCM token
         FirebaseMessaging.getInstance().getToken()
                 .addOnCompleteListener(task -> {
@@ -109,17 +114,18 @@ public final class AuthManager {
                         Log.w(TAG, "Fetching FCM registration token failed", task.getException());
                     }
 
-                    // Create user data with FCM token
+                    // Create user data with FCM token and displayName
+                    String finalDisplayName = displayName != null ? displayName : firebaseUser.getDisplayName();
                     User user = new User(
                             firebaseUser.getUid(),
                             firebaseUser.getEmail(),
-                            firebaseUser.getDisplayName() // This might be null initially
+                            finalDisplayName
                     );
 
                     Map<String, Object> userData = new HashMap<>();
                     userData.put("uid", user.getUid());
                     userData.put("email", user.getEmail());
-                    userData.put("displayName", user.getDisplayName());
+                    userData.put("displayName", finalDisplayName);
                     if (fcmToken != null) {
                         userData.put("fcmToken", fcmToken);
                     }
@@ -203,6 +209,40 @@ public final class AuthManager {
     // Log out the current user
     public static void logout() {
         getAuthInstance().signOut();
+    }
+
+    // Get the display name of the current user from Firestore
+    public static void getCurrentUserDisplayName(final DisplayNameListener listener) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            if (listener != null) {
+                listener.onFailure("No user logged in");
+            }
+            return;
+        }
+
+        getFirestoreInstance().collection("users")
+                .document(user.getUid())
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists() && listener != null) {
+                        String displayName = documentSnapshot.getString("displayName");
+                        listener.onSuccess(displayName != null ? displayName : user.getEmail());
+                    } else if (listener != null) {
+                        listener.onSuccess(user.getEmail()); // Fallback to email
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (listener != null) {
+                        listener.onFailure(e.getMessage());
+                    }
+                });
+    }
+
+    // Interface for display name callbacks
+    public interface DisplayNameListener {
+        void onSuccess(String displayName);
+        void onFailure(String errorMessage);
     }
 
     // Interface for authentication task callbacks
