@@ -67,9 +67,6 @@ public final class AuthManager {
     }
 
     // Register a new user with Firebase and save to Firestore
-    public static void register(Context context, String email, String password, final AuthTaskListener listener) {
-        register(context, email, password, null, listener);
-    }
 
     // Register a new user with Firebase and save to Firestore with displayName
     public static void register(Context context, String email, String password, String displayName, final AuthTaskListener listener) {

@@ -22,11 +22,13 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -47,6 +49,8 @@ public class ChatActivity extends AppCompatActivity {
     String receiverId, receiverName, senderRoom, receiverRoom;
     DatabaseReference dbReferenceSender, dbReferenceReceiver, userReference;
     String senderId, senderName, senderImage;
+    FirebaseAuth mAuth;
+    FirebaseUser user;
 
     private static final int PICK_IMAGE_REQUEST = 1;
     private ImageView imagePickerBtn;
@@ -65,6 +69,19 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_chat);
+
+        mAuth = FirebaseAuth.getInstance();
+        user = mAuth.getCurrentUser();
+
+        if (user != null) {
+            // Cargar displayName desde Firestore
+            loadCurrentUserDisplayName();
+        }
+
+        //Log.d("ChatActivity", "UserID: " + user.getUid());
+        //Log.d("ChatActivity", "User Nombre: " + user.getDisplayName());
+        //Log.d("ChatActivity", "User Correo: " + user.getEmail());
+
 
         // Set up the toolbar with back button
         Toolbar toolbar = findViewById(R.id.toolbar);
@@ -130,6 +147,27 @@ public class ChatActivity extends AppCompatActivity {
                 Toast.makeText(ChatActivity.this, "Message cannot be empty", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+
+    private void loadCurrentUserDisplayName() {
+        FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(user.getUid())
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        senderName = documentSnapshot.getString("displayName");
+                        if (senderName == null || senderName.isEmpty()) {
+                            senderName = user.getEmail();
+                        }
+                        Log.d("ChatActivity", "Loaded displayName from Firestore: " + senderName);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("ChatActivity", "Failed to load displayName from Firestore", e);
+                    senderName = user.getEmail();
+                });
     }
 
     private void loadSenderInfo() {
@@ -309,24 +347,32 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void sendNotificationToReceiver(String message) {
-        Log.d("ChatActivity", "sendNotificationToReceiver called");
+        String finalSenderName;
+        if (user != null && user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
+            finalSenderName = user.getDisplayName();
+        } else if (senderName != null && !senderName.isEmpty()) {
+            // Usar el senderName cargado de Firebase
+            finalSenderName = senderName;
+        } else if (user != null && user.getEmail() != null) {
+            // Fallback al email
+            finalSenderName = user.getEmail();
+        } else {
+            finalSenderName = "Unknown User";
+        }
+
         Log.d("ChatActivity", "receiverId: " + receiverId);
-        Log.d("ChatActivity", "senderName: " + senderName);
+        Log.d("ChatActivity", "finalSenderName: " + finalSenderName);
         Log.d("ChatActivity", "message: " + message);
         Log.d("ChatActivity", "notificationHelper null? " + (notificationHelper == null));
 
-
-        if (senderName == null){
-            senderName = "Someone";
-        }
-        if (notificationHelper != null && receiverId != null && senderName != null) {
+        if (notificationHelper != null && receiverId != null && finalSenderName != null) {
             Log.d("ChatActivity", "About to call notificationHelper.sendNotificationToUser");
-            notificationHelper.sendNotificationToUser(receiverId, senderName, message);
+            notificationHelper.sendNotificationToUser(receiverId, finalSenderName, message);
         } else {
             Log.e("ChatActivity", "Cannot send notification - missing data");
             if (notificationHelper == null) Log.e("ChatActivity", "notificationHelper is null");
             if (receiverId == null) Log.e("ChatActivity", "receiverId is null");
-            if (senderName == null) Log.e("ChatActivity", "senderName is null");
+            if (finalSenderName == null) Log.e("ChatActivity", "finalSenderName is null");
         }
     }
 
