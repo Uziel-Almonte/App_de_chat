@@ -18,6 +18,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            isDebuggable = true
+            isJniDebuggable = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -25,6 +29,17 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+    packagingOptions {
+        exclude("META-INF/DEPENDENCIES")
+        exclude("META-INF/LICENSE")
+        exclude("META-INF/LICENSE.txt")
+        exclude("META-INF/license.txt")
+        exclude("META-INF/NOTICE")
+        exclude("META-INF/NOTICE.txt")
+        exclude("META-INF/notice.txt")
+        exclude("META-INF/ASL2.0")
+        exclude("META-INF/*.kotlin_module")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -49,17 +64,20 @@ dependencies {
 
 
     // Import the Firebase BoM
-    implementation(platform(libs.firebase.bom))
+    implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
 
-    // Firebase dependencies (versions managed by BoM)
-    implementation(libs.firebase.auth)
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.messaging)
-    implementation(libs.activity)
-    implementation(libs.firebase.database)
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-messaging")
 
     // HTTP client for sending notifications
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(libs.google.firebase.firestore)
+
+    // Para FCM HTTP v1
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
+    implementation("com.google.auth:google-auth-library-credentials:1.19.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

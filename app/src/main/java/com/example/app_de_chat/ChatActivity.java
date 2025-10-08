@@ -37,6 +37,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import android.util.Log;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -64,7 +65,7 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_chat);
-        
+
         // Initialize notification helper
         notificationHelper = new NotificationHelper(this);
 
@@ -128,7 +129,11 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (snapshot.exists()) {
-                    senderName = snapshot.child("name").getValue(String.class);
+                    senderName = snapshot.child("senderName").getValue(String.class);
+                    if (senderName == null) {
+                        // Usar email como fallback
+                        senderName = "test2";
+                    }
                     senderImage = snapshot.child("imageUri").getValue(String.class);
                 }
             }
@@ -175,6 +180,8 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void sendMessage(String message) {
+        Log.d("ChatActivity", "sendMessage called with message: " + message);
+
         String messageId = UUID.randomUUID().toString();
         MessageModel messageModel = new MessageModel(messageId, senderId, senderName, message);
 
@@ -184,10 +191,14 @@ public class ChatActivity extends AppCompatActivity {
                     @Override
                     public void onComplete(@NonNull Task<Void> task) {
                         if (task.isSuccessful()) {
+                            Log.d("ChatActivity", "Message saved to sender's room successfully");
                             // guardar el el chat del receptor
                             dbReferenceReceiver.child(messageId).setValue(messageModel);
                             // Send notification to receiver
+                            Log.d("ChatActivity", "Calling sendNotificationToReceiver");
                             sendNotificationToReceiver(message);
+                        } else {
+                            Log.e("ChatActivity", "Failed to save message to sender's room");
                         }
                     }
                 })
@@ -290,8 +301,24 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void sendNotificationToReceiver(String message) {
+        Log.d("ChatActivity", "sendNotificationToReceiver called");
+        Log.d("ChatActivity", "receiverId: " + receiverId);
+        Log.d("ChatActivity", "senderName: " + senderName);
+        Log.d("ChatActivity", "message: " + message);
+        Log.d("ChatActivity", "notificationHelper null? " + (notificationHelper == null));
+
+
+        if (senderName == null){
+            senderName = "Someone";
+        }
         if (notificationHelper != null && receiverId != null && senderName != null) {
+            Log.d("ChatActivity", "About to call notificationHelper.sendNotificationToUser");
             notificationHelper.sendNotificationToUser(receiverId, senderName, message);
+        } else {
+            Log.e("ChatActivity", "Cannot send notification - missing data");
+            if (notificationHelper == null) Log.e("ChatActivity", "notificationHelper is null");
+            if (receiverId == null) Log.e("ChatActivity", "receiverId is null");
+            if (senderName == null) Log.e("ChatActivity", "senderName is null");
         }
     }
 
